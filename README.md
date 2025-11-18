@@ -1,4 +1,5 @@
-Provided are some of the tools that I have developed to display data from the iNaturalist API:
+Below are some tools that I have developed to display data from the iNaturalist API. Please feel free to use, credit is appreciated. 
+- James Mickley ([@mickley](https://www.inaturalist.org/people/mickley))
 
 # Tools for ID-A-Thons
 

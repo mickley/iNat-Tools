@@ -1,0 +1,1565 @@
+<html>
+<head>
+<title>iNaturalist Species Counter</title>
+
+<link href="https://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" type="text/css" rel="stylesheet">
+
+<link href="css/inaticons.css" type="text/css" rel="stylesheet">
+
+<!-- 
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/themes/smoothness/jquery-ui.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+
+-->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" type="text/javascript"></script>
+<script src="https://code.jquery.com/ui/1.14.0/jquery-ui.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/gh/mickley/iNatJS@main/inatjs.js" type="text/javascript"></script>
+<script>
+
+	// Make a new class instance
+	const iNat = new iNatJS();
+
+	// https://herbarium.science.oregonstate.edu/iNat/speciescount.php?project_id=168279&hrank=species&quality_grade=needs_id&order=asc
+	// https://api.inaturalist.org/v1/docs/#!/Observations/get_observations_species_counts
+	var page = 1;
+	var pages = 1;
+	var taxa = [];
+	var params = {};
+	var urlparams = '';
+
+	function getTaxa(next) {
+
+		if(!("page" in params)) params.page = page;
+		if(!("per_page" in params)) params.per_page = 100;
+
+		// Increment the page, if next is true and we haven't run out of pages
+		if(next & pages > 1 & page + 1 <= pages) {
+			params.page = page + 1;
+			page = params.page;
+		}
+
+		// Make a copy of the params object
+		// Remove reviewed=any from the parameters if it is set (breaks this API and is the default)
+		let searchparams = Object.assign({}, params);
+		if(searchparams['reviewed'] == 'any') delete searchparams['reviewed'];
+
+		var fields = {
+		   count: "",
+		   taxon: {
+		      id: "", 
+		      name: "",
+		      default_photo: ["medium_url"], 
+		      preferred_common_name: "",
+		      observations_count: "", 
+		      iconic_taxon_name: ""
+		   }
+		}
+
+		// Get the data from iNaturalist
+		iNat.queueINatRequest({
+		     method: 'GET',
+		     apiVersion: "v2",
+		     endpoint: "observations/species_counts",
+		     params: searchparams,
+		     fields: iNat.toRISON(fields),
+		     success: function(data) {
+		     	//data.total_results
+		        console.log(data.results);
+		        makeTable(data);
+		     }, 
+		     error: function(xhr, status, error) {
+		        console.log(status + ' ' + xhr.status + ': ' + error);
+		     }
+		 });
+		return true;
+	}
+
+	function makeTable(data){
+
+		var html = '';
+		//var taxa = [];
+
+		page = data.page;
+		pages = Math.ceil(data.total_results/data.per_page)
+
+		var max_obs = ("max_obs" in params) ? params.max_obs : false
+		var min_obs = ("min_obs" in params) ? params.min_obs : false
+		var max_global_obs = ("max_global_obs" in params) ? params.max_global_obs : false
+		var min_global_obs = ("min_global_obs" in params) ? params.min_global_obs : false
+
+		// Add reviewed=any to the identify page URL parameters if it is set. 
+		//if($('[name=reviewed]').val() == 'any') params['reviewed'] = 'any';
+
+		//['page', 'per_page', "order", "min_obs", "max_obs"].forEach(e => delete params[e]);
+		let remove = ['min_obs', 'max_obs', 'min_global_obs', 'max_global_obs', 'page', 'per_page', 'taxon_id'];
+		urlparams = (typeof params == 'object') ? '&' + $.param(deleteKeys(params, remove)) : '';
+
+		console.log("results: " + data.total_results + ", per-page: " + data.per_page + ", page #" + page + ", pages: " + pages);
+		var skip = 0;
+
+		for (record of data.results) {
+			//console.log(min_obs, record.count);
+			if ( (min_obs && record.count < min_obs) || (min_global_obs && record.taxon.observations_count < min_global_obs) || (max_global_obs && record.taxon.observations_count > max_global_obs) ) {
+				skip++;
+				continue;
+			}
+
+			if (max_obs && record.count > max_obs) {
+
+				skip++;
+				pages = page;
+				continue;
+			}
+
+			taxa.push(record.taxon.id);
+			
+			let idURL = "https://www.inaturalist.org/observations/identify?taxon_id=" + record.taxon.id + urlparams;
+			
+			// Deal with missing thumbnails and common names
+			let thumb = record.taxon.default_photo != null ? record.taxon.default_photo.medium_url : '';
+			let common_name = record.taxon.preferred_common_name != null ? record.taxon.preferred_common_name : "&nbsp;";
+			
+			html += '<div class="result flex">';
+			html += '<div class="thumbnail flex flex-column flex-grow-1">';
+			html += '<a href="' + idURL + '" target="_blank">';
+
+			if(thumb) {
+				html += '<div class="photo" style="background-image: url(' + thumb + ');"></div>';
+			} else {
+				// TODO: get icons from inaticons.css to work
+	    		//html += '<div class="photo"><i class="icon-iconic-' + record.taxon.iconic_taxon_name.toLowerCase() + '"></i></div>';
+	    		html += '<div class="photo" style="background-image: url(images/plantae-icon.png);"></div>';
+			}
+			
+			html += '</a>';
+			html += '<div class="overlay"><div><a href="' + idURL + '" target="_blank">' + record.count + ' observation' + (record.count > 1 ? 's' : '') + '</a></div></div>';
+			html += '<div class="caption"><span>';
+			html += '<a class="sciname" href="https://www.inaturalist.org/taxa/' + record.taxon.id + '"  target="_blank">' + record.taxon.name + '</a>';
+			html += '<a class="common-name" href="https://www.inaturalist.org/taxa/' + record.taxon.id + '" target="_blank">' + common_name + '</a>';
+			html += '</span></div></div></div>';
+
+		}
+
+		// Get the next page, unless we've run out of pages
+		//console.log("debug: ", skip, data.per_page, taxa.length, page, pages);
+		//console.log(taxa);
+		if((skip == data.per_page || taxa.length < 20) && page < pages) getTaxa(true);
+
+		// Add the results to the results div
+   		$('#results').append(html);
+
+   		var linkall = '<h2><a href="https://www.inaturalist.org/observations/identify?taxon_id=' + taxa.join(",") + urlparams + '" target="_blank">Identify All Taxa</a></h2>';
+
+   		//$('#link').html(linkall);
+
+	}
+
+	// Update the URL of the page with filter parameters
+	function makeURL() {
+
+		// Define parameters to remove from the url
+		let remove = ["page", "per_page"];
+
+		// Construct the URL
+		let url = '/iNat-Tools/speciescount.html?' + $.param(deleteKeys(params, remove));
+
+		// Update in browser
+		history.pushState(null, '', url);    
+
+	}
+
+	// Function to delete keys from an object
+	function deleteKeys(object, keys) {
+		let newObj = Object.assign({}, object);
+	    for(var i = 0; i < keys.length; i++) {
+	        if(newObj.hasOwnProperty(keys[i])) {
+	            delete newObj[keys[i]];
+	        }
+	    }
+	    return(newObj);
+	};
+
+	// This gets the name of a project, place, user, or taxon from iNaturalist using its ID 
+	// and puts the name in the specified input field
+	function getiNatName(endpoint, id, name, input_field){
+		iNat.queueINatRequest({
+		    method: 'GET',
+		    apiVersion: "v2",
+		    endpoint: endpoint + '/' + id,
+		    fields: name,
+			success: function(data) {
+				$('[name=' + input_field + ']').val(data.results[0][name]);
+			},
+			error: function(xhr, status, error) {
+				console.log(status + ' ' + xhr.status + ': ' + error);
+			}
+		});
+	}
+
+	// Populate the filters window from the URL parameters
+	function setFilters(){
+
+		// Set defaults
+		if(!params['reviewed']) params['reviewed'] = "any";
+		if(!params['quality_grade']) params['quality_grade'] = "needs_id";
+		if(!params['order']) params['order'] = "asc";
+
+		Object.keys(params).forEach(function(key) {
+
+			switch(key){
+				case "quality_grade":
+					// Parse array of quality grades and set accordingly
+					let quality = params[key].split(",")
+					quality.forEach( option => $('[name=' + option + ']').prop('checked', true));
+					
+					// Disable checkbox if only one is checked
+					if(quality.length == 1) {
+						$('input[name=' + quality[0] + ']').prop("disabled", true);
+					}
+					break;
+
+				// Checkboxes
+				case "captive":
+				case "introduced":
+				case "native":
+				case "threatened":
+				case "endemic":
+					$('[name=' + key + ']').prop('checked', params[key]);
+					break;
+
+				case "project_id":
+					getiNatName("projects", params[key], "title", "project");
+					$("project_id").val(params[key]);
+					break;
+
+				case "place_id":
+					getiNatName("places", params[key], "display_name", "place");
+					$("place_id").val(params[key]);
+					break;
+
+				case "taxon_id":
+					getiNatName("taxa", params[key], "name", "taxon");
+					$("taxon_id").val(params[key]);
+					break;
+
+				case "viewer_id":
+					getiNatName("users", params[key], "login", "viewer_login");
+					$("viewer_id").val(params[key]);
+					break;
+
+				// Radio buttons
+				case "reviewed":
+					$('[name=' + key + ']').filter('[value="' + params[key] + '"]').attr('checked', true);
+					if(params[key] != "any"){
+						$("#reviewed-input").show();
+					}
+					break;
+
+				case "observed_on":
+					$('[name=obs-date]').filter('[value="exact"]').attr('checked', true);
+					$('[name=' + key + ']').val(params[key]);
+					$("#obs-date-exact").show()
+					break;
+
+				case "d1":
+				case "d2":
+					$('[name=obs-date]').filter('[value="range"]').attr('checked', true);
+					$('[name=' + key + ']').val(params[key]);
+					$("#obs-date-range").show()
+					break;
+
+				case "created_on":
+					$('[name=create-date]').filter('[value="exact"]').attr('checked', true);
+					$('[name=' + key + ']').val(params[key]);
+					$("#create-date-exact").show()
+					break;
+
+				case "created_d1":
+				case "created_d2":
+					$('[name=create-date]').filter('[value="range"]').attr('checked', true);
+					$('[name=' + key + ']').val(params[key]);
+					$("#create-date-range").show()
+					break;
+
+				// Ignore
+				case "page":
+				case "per_page":
+				case "":
+					break;
+
+				// Default: any fields that can just have the value set (input, select)
+				default:
+					$('[name=' + key + ']').val(params[key]);
+					break;
+			}
+
+		});
+	}
+
+	// More variables
+	// out_of_range: true false
+	// rank: subspecies variety species
+	// outlink_source
+
+	// Onload
+	$(function(){
+
+		// Get a list of URL parameters passed to the page when it is loaded
+		params = iNat.getUrlParams(location.search);
+
+		// Populate the filters from the URL parameters
+		setFilters();
+
+		// Get the taxa to display
+		getTaxa();
+
+		// Set upo scrolling so that when a user reaches the end of a page, the next page is automatically loaded
+		$(window).scroll(function() {
+
+			//console.log($(window).scrollTop(), window.innerHeight, $(document).height());
+		   	if($(window).scrollTop() + window.innerHeight + 5 >= $(document).height()) {
+		    	if(page < pages) getTaxa(true);
+		   	}
+		});
+
+		// Show the instructions when the instructions button is clicked
+		$('#inst').click(function() {
+		    var btn = $(this);
+		    $('#filters').hide();
+		    $('#instructions').css({
+		        position: 'absolute',
+		        top: btn.position().top + btn.outerHeight() + 5,
+		        left: btn.offset().left - 250
+		    }).toggle();
+		});
+
+		// Show the Filters window when the filters button is clicked
+		$('#filt').click(function() {
+		    var btn = $(this);
+		    $('#instructions').hide();
+		    $('#filters').css({
+		        position: 'absolute',
+		        top: btn.position().top + btn.outerHeight() + 5,
+		        left: btn.offset().left - 400
+		    }).toggle();
+		});
+
+		// Go to iNaturalist and identify all the loaded results
+		$('#identify').click(function() {
+
+			let remove = ['min_obs', 'max_obs', 'min_global_obs', 'max_global_obs', 'page', 'per_page'];
+			let urlparams = $.param(deleteKeys(params, remove));
+
+			window.open('https://www.inaturalist.org/observations/identify?' + urlparams + '&taxon_id=' + taxa.join(','));
+			$('#instructions, #filters').hide();
+		});
+
+		// Update the search with current filter options
+		$('#update-search').click(function() {
+			// Reset everything
+			$('#results').html('');
+			params = iNat.getUrlParams(location.search);
+			taxa = [];
+			page = 1;
+			pages = 1;
+			getTaxa();
+			$('#filters').hide();
+		});
+
+		$('#reset').click(function() {
+			// Reset filters
+
+		});
+
+		// Run whenever any of the filters are changed
+		$('input, select').change(function () {
+
+			// Get the name of the field that changed
+			let name = $(this).attr('name');
+
+			// Process the field, depending on its name
+			switch(name) {
+
+				// quality_grade
+				case "casual":
+				case "needs_id":
+				case "research":
+
+					// Store the checked quality grades in an array
+					let quality = [];
+					if($('input[name=casual]').prop('checked')) quality.push("casual");
+					if($('input[name=needs_id]').prop('checked')) quality.push("needs_id");
+					if($('input[name=research]').prop('checked')) quality.push("research");
+
+					// Disable checkbox if only one is checked
+					if(quality.length == 1) {
+						$('input[name=' + quality[0] + ']').prop("disabled", true);
+					} else {
+						$('input:checkbox.quality').prop("disabled", false);
+					}
+
+					// If only needs_id is checked, no need for parameter. Otherwise, join the active ones
+					if(quality.length == 1 && quality[0] == 'needs_id') {
+						delete params['quality_grade'];
+					} else {
+						params['quality_grade'] = quality.join(",");
+					}
+
+					break;
+
+				// Checkboxes
+				case "captive":
+				case "introduced":
+				case "native":
+				case "threatened":
+				case "endemic":
+					if (this.checked) {
+						params[name] = "true";
+					} else {
+						delete params[name];
+					}
+					break;
+
+				case "user_login":
+					if ($(this).val() == "") delete params[name];
+					break;
+
+				case "reviewed":
+
+					if ($(this).val() && $(this).val() != 0) {
+						params[name] = $(this).val();
+					} else {
+						delete params[name];
+					}
+
+					if($(this).val() == "any") {
+						$('input[name=viewer_login]').val("");
+						$('input[name=viewer_id]').val("");
+						delete params['viewer_id'];
+					}
+
+					break;
+
+				case "obs-date":
+
+					// Remove the exact date
+					if($(this).val() != "exact") {
+						$('input[name=observed_on]').val("");
+						delete params['observed_on'];
+					}
+					
+					// Remove the date ranges
+					if ($(this).val() != "range") {
+						$('input[name=d1]').val("");
+						$('input[name=d2]').val("");
+						delete params['d1'];
+						delete params['d2'];
+					} 
+					break;
+
+				case "create-date":
+
+					// Remove the exact date
+					if($(this).val() != "exact") {
+						$('input[name=created_on]').val("");
+						delete params['created_on'];
+					}
+					
+					// Remove the date ranges
+					if ($(this).val() != "range") {
+						$('input[name=created_d1]').val("");
+						$('input[name=created_d2]').val("");
+						delete params['created_d1'];
+						delete params['created_d2'];
+					} 
+					break;
+
+				// Simple variables
+				case "project_id":
+				case "place_id":
+				case "taxon_id":
+				case "hrank":
+				case "lrank":
+				case "viewer_id":
+				case "min_obs":
+				case "max_obs":
+				case "min_global_obs":
+				case "max_global_obs":
+				case "observed_on": // obs-date exact
+				case "d1": // obs-date range
+				case "d2": // obs-date range	
+				case "created_on": // create-date exact
+				case "created_d1": // create-date range
+				case "created_d2": // create-date range
+				case "order":
+					
+					if ($(this).val() && $(this).val() != 0) {
+						params[name] = $(this).val();
+					} else {
+						delete params[name];
+					}
+					break;
+
+				// Ignore without updating URL
+				case "":
+				default:
+					return;
+					
+			}
+			makeURL();
+		});
+
+		// Deal with dates
+		$('input:radio[name$=-date]').change(function () {
+			let name = "#" + $(this).attr('name');
+			if ($(this).val() == "exact") {
+				$(name + '-exact').show()
+				$(name + '-range').hide()
+			} else if ($(this).val() == "range") {
+				$(name + '-exact').hide()
+				$(name + '-range').show()
+
+			} else {
+				$(name + '-exact, ' + name + '-range').hide()
+			}
+      
+        });
+
+		// 
+        $('input:radio[name=reviewed]').change(function () {
+        	if($(this).val() == "any") {
+        		$("#reviewed-input").hide()
+        	} else {
+        		$("#reviewed-input").show()
+        	}
+        });
+
+	    // User_login autocomplete function
+	    $("#user_login").autocomplete({
+			minLength: 4,
+			source : function( request, response ) {
+				iNat.queueINatRequest({
+				    method: 'GET',
+				    apiVersion: "v2",
+				    endpoint: "users/autocomplete",
+				    params: {"q": request.term},
+				    fields: '(icon:!t,login:!t,name:!t)',
+					success: function(data) {
+						response($.map(data.results, function(item) {
+							return {
+								label : item.login,
+								name : (item.name ? item.name : ""),
+								thumb : (item.icon ? item.icon : "https://www.inaturalist.org/attachment_defaults/users/icons/defaults/thumb.png"),
+								value : item.login
+							}
+					   }));
+					},
+					error: function(xhr, status, error) {
+						console.log(status + ' ' + xhr.status + ': ' + error);
+					}
+				});
+			},
+			select: function(event, ui) {
+				params['user_login'] = ui.item.label;
+      			makeURL();
+			},
+      		change: function( event, ui) {
+
+      			// Did not get an autocomplete result. Unset everything to force use of autocomplete
+      			if(!ui.item) {
+      				$("#user_login").val("");
+		        	$("input[name=user_login]").trigger("change");
+      			}
+      		},
+			close: function( event, ui ) {
+				// On Dialog Close
+				//$('.ui-autocomplete').show();
+			}
+	    })
+	    .data("ui-autocomplete")._renderItem = function(ul, item) {
+
+	    	// Construct the taxon row
+	    	let itemHtml = '<div class="ui-menu-picker" style="min-width: 200px;">';
+	    	itemHtml += '<div class="ui-menu-thumb"><img src="' + item.thumb + '"></div>';
+	    	itemHtml += '<div class="ui-menu-label"><span class="title">' + item.label + '</span>';
+	    	itemHtml += '<span class="subtitle">' + item.name + '</span></div>';
+	    	itemHtml += '</div>';
+
+	    	return $( "<li>" )
+	    		.append( "<a>" + itemHtml + "</a>" )
+	    		.appendTo( ul );
+	    };
+
+	    // Project autocomplete function
+	    $("#project").autocomplete({
+			minLength: 4,
+			source : function( request, response ) {
+				iNat.queueINatRequest({
+				    method: 'GET',
+				    apiVersion: "v2",
+				    endpoint: "projects",
+				    params: {"q": request.term},
+				    fields: '(id:!t,icon:!t,title:!t,slug:!t)',
+					success: function(data) {
+						response($.map(data.results, function(item) {
+							return {
+								label : item.title,
+								thumb : item.icon,
+								value : item.id
+							}
+					   }));
+					},
+					error: function(xhr, status, error) {
+						console.log(status + ' ' + xhr.status + ': ' + error);
+					}
+				});
+			},
+			select: function(event, ui) {
+
+		        // Prevent a change event for place, and set its value to the label, not the id
+		        event.preventDefault(); 
+		        $("#project").val(ui.item.label);
+
+		        // Set the hidden place_id field and trigger a change event for it to update the URL
+		        $('#project_id').val(ui.item.value); 
+		        $("input[name=project_id]").trigger("change");
+      		},
+      		change: function( event, ui) {
+
+      			// Did not get an autocomplete result. Unset everything to force use of autocomplete
+      			if(!ui.item) {
+      				$("#project").val("");
+      				$('#project_id').val(""); 
+		        	$("input[name=project_id]").trigger("change");
+      			}
+      		},
+			close: function( event, ui ) {
+				// On Dialog Close
+			}
+	    })
+	    .data("ui-autocomplete")._renderItem = function(ul, item) {
+
+	    	// Construct the taxon row
+	    	let itemHtml = '<div class="ui-menu-picker" style="min-width: 200px;">';
+	    	itemHtml += '<div class="ui-menu-thumb"><img src="' + item.thumb + '"></div>';
+	    	itemHtml += '<div class="ui-menu-label" style="font-size: 1.2em; margin-top: 10px;"><span class="title">' + item.label + '</span></div>';
+	    	itemHtml += '</div>';
+
+	    	return $( "<li>" )
+	    		.append( "<a>" + itemHtml + "</a>" )
+	    		.appendTo( ul );
+	    };
+
+	    // Place autocomplete function
+	    $("#place").autocomplete({
+			minLength: 4,
+			source : function( request, response ) {
+				iNat.queueINatRequest({
+				    method: 'GET',
+				    apiVersion: "v2",
+				    endpoint: "places",
+				    params: {q: request.term},
+				    fields: '(id:!t,display_name:!t,name:!t,place_type:!t)',
+					success: function(data) {
+						response($.map(data.results, function(item) {
+							return {
+								label: item.display_name,
+								type: place_types[item.place_type],
+								value: item.id
+							}
+					   }));
+					},
+					error: function(xhr, status, error) {
+						console.log(status + ' ' + xhr.status + ': ' + error);
+					}
+				});
+			},
+			select: function(event, ui) {
+
+		        // Prevent a change event for place, and set its value to the label, not the id
+		        event.preventDefault(); 
+		        $("#place").val(ui.item.label);
+
+		        // Set the hidden place_id field and trigger a change event for it to update the URL
+		        $('#place_id').val(ui.item.value); 
+		        $("input[name=place_id]").trigger("change");
+
+      		},
+      		change: function( event, ui) {
+
+      			// Did not get an autocomplete result. Unset everything to force use of autocomplete
+      			if(!ui.item) {
+      				$("#place").val("");
+      				$('#place_id').val(""); 
+		        	$("input[name=place_id]").trigger("change");
+      			}
+      		},
+			close: function( event, ui ) {
+				// On Dialog Close
+			}
+	    })
+	    .data("ui-autocomplete")._renderItem = function(ul, item) {
+		    // Add the place type to the dropdown, if available
+		    if (item.type) {
+		        return $( "<li>" )
+		        	.append( "<a>" + item.label + ' <span class="ui-menu-sublabel">' + item.type + "</span></a>" )
+		            .appendTo( ul );
+		    } else {
+		        return $( "<li>" )
+		        	.append( "<a>" + item.label + "</a>" )
+		            .appendTo( ul );
+		    }
+	    };
+
+
+	    // Taxon autocomplete function
+	    $("#taxon").autocomplete({
+			minLength: 4,
+			source : function( request, response ) {
+				iNat.queueINatRequest({
+				    method: 'GET',
+				    apiVersion: "v2",
+				    endpoint: "taxa/autocomplete",
+				    params: {"q": request.term},
+				    fields: '(name:!t,preferred_common_name:!t,rank:!t,default_photo:(url:!t),iconic_taxon_name:!t)',
+				    // is_active might be needed
+					success: function(data) {
+
+						// Make an object of subtaxa abbreviations
+	    				let subtaxa = {subspecies: "ssp.", variety: "var.",form: "f."}
+
+						response($.map(data.results, function(item) {
+							// Defaults
+							let binomial = subtaxon = infra_rank = "";
+							let name = item.name;
+							let rank = item.rank;
+							
+							// Format subtaxon components if needed
+							if(item.rank == "subspecies" | item.rank == "variety" | item.rank == "form") {
+								let parts = item.name.split(" ");
+								binomial = parts.slice(0, 2).join(" ");
+								subtaxon = parts[2];
+								rank = subtaxa[item.rank];
+								name = parts.toSpliced(2, 0, rank).join(" ");
+							}
+
+							return {
+								label : name,
+								rank : rank,
+								binomial : binomial,
+								subtaxon : subtaxon,
+								common_name : item.preferred_common_name,
+								thumb : (item.default_photo ? item.default_photo.url : ""),
+								iconic_taxon : item.iconic_taxon_name.toLowerCase(),
+								value : item.id
+							}
+					   }));
+					},
+					error: function(xhr, status, error) {
+						console.log(status + ' ' + xhr.status + ': ' + error);
+					}
+				});
+			},
+			select: function(event, ui) {
+
+		        // Prevent a change event for taxon, and set its value to the label, not the id
+		        event.preventDefault(); 
+		        $("#taxon").val(ui.item.label);
+
+		        // Set the hidden taxon_id field and trigger a change event for it to update the URL
+		        $('#taxon_id').val(ui.item.value); 
+		        $("input[name=taxon_id]").trigger("change");
+		    
+      		},
+      		change: function( event, ui) {
+
+      			// Did not get an autocomplete result. Unset everything to force use of autocomplete
+      			if(!ui.item) {
+      				$("#taxon").val("");
+      				$('#taxon_id').val(""); 
+		        	$("input[name=taxon_id]").trigger("change");
+      			}
+      		},
+			close: function( event, ui ) {
+				// On Dialog Close
+			}
+	    }).data("ui-autocomplete")._renderItem = function(ul, item) {
+
+	    	// Handle different taxon ranks
+	    	switch(item.rank) {
+
+	    		// Normal species names
+	    		case "species":
+	 				taxonName = '<i>' + item.label + '</i>';
+	 				break;
+
+	 			// Format infraspecific names
+	    		case "ssp.":
+	    		case "var.":
+	    		case "f.":
+	    			taxonName = '<i>' + item.binomial + '</i> ' + item.rank + ' <i>' + item.subtaxon + '</i>';
+	    			break;
+
+	    		// All other ranks
+	    		default:
+	    			taxonName = item.rank[0].toUpperCase() + item.rank.slice(1) + ' <i>' + item.label + '</i>';
+	    			break;
+	    	}
+
+	    	// Construct the taxon row
+	    	let itemHtml = '<div class="ui-menu-picker">';
+	    	if(item.thumb) {
+	    		itemHtml += '<div class="ui-menu-thumb"><img src="' + item.thumb + '"></div>';
+	    	} else {
+	    		// TODO: get icons from inaticons.css to work
+	    		//itemHtml += '<div class="no-photo"><i class="icon-iconic-' + item.iconic_taxon + '"></i></div>';
+	    		itemHtml += '<div class="ui-menu-thumb"><img src="images/plantae-icon.png"></div>';
+	    	}
+	    	
+	    	itemHtml += '<div class="ui-menu-label"><span class="title">' + taxonName + '</span>';
+	    	itemHtml += '<span class="subtitle">' + (item.common_name ? item.common_name : "") + '</span></div>';
+	    	itemHtml += '</div>';
+
+	    	return $( "<li>" )
+	    		.append( "<a>" + itemHtml + "</a>" )
+	    		.appendTo( ul );
+
+	    };
+	    // tmp.data("ui-autocomplete").close = function(e){
+	    //   	console.log("close function");
+	    //   	return false;
+	    // };
+
+
+	    // User_login autocomplete function
+	    $("#viewer_login").autocomplete({
+			minLength: 4,
+			source : function( request, response ) {
+				iNat.queueINatRequest({
+				    method: 'GET',
+				    apiVersion: "v2",
+				    endpoint: "users/autocomplete",
+				    params: {"q": request.term},
+				    fields: '(icon:!t,login:!t,name:!t)',
+					success: function(data) {
+						response($.map(data.results, function(item) {
+							return {
+								label : item.login,
+								name : (item.name ? item.name : ""),
+								thumb : (item.icon ? item.icon : "https://www.inaturalist.org/attachment_defaults/users/icons/defaults/mini.png"),
+								value : item.id
+							}
+					   }));
+					},
+					error: function(xhr, status, error) {
+						console.log(status + ' ' + xhr.status + ': ' + error);
+					}
+				});
+			},
+			select: function(event, ui) {
+
+		        // Prevent a change event for viewer_login, and set its value to the label, not the id
+		        event.preventDefault(); 
+		        $("#viewer_login").val(ui.item.label);
+
+		        // Set the hidden viewer_id field and trigger a change event for it to update the URL
+		        $('#viewer_id').val(ui.item.value); 
+		        $("input[name=viewer_id]").trigger("change");
+		    
+      		},
+      		change: function( event, ui) {
+
+      			// Did not get an autocomplete result. Unset everything to force use of autocomplete
+      			if(!ui.item) {
+      				$("#viewer_login").val("");
+      				$('#viewer_id').val(""); 
+		        	$("input[name=viewer_id]").trigger("change");
+      			}
+      		},
+			close: function( event, ui ) {
+				// On Dialog Close
+			}
+	    })
+	    .data("ui-autocomplete")._renderItem = function(ul, item) {
+
+	    	// Construct the taxon row
+	    	let itemHtml = '<div class="ui-menu-picker" style="min-width: 200px;">';
+	    	itemHtml += '<div class="ui-menu-thumb"><img src="' + item.thumb + '"></div>';
+	    	itemHtml += '<div class="ui-menu-label"><span class="title">' + item.label + '</span>';
+	    	itemHtml += '<span class="subtitle">' + item.name + '</span></div>';
+	    	itemHtml += '</div>';
+
+	    	return $( "<li>" )
+	    		.append( "<a>" + itemHtml + "</a>" )
+	    		.appendTo( ul );
+	    };
+
+
+	});
+
+
+</script>
+
+     <link rel="stylesheet" media="screen" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" />
+
+<style>
+
+body {
+    font-family: Whitney,"Trebuchet MS",Arial,sans-serif;
+    color: #333;
+    background: #eee;
+}
+
+#results a {
+    color: inherit;
+    text-decoration: none;
+}
+
+h2 {
+	text-align: center;
+}
+
+h2 a:hover {
+	text-decoration: underline;
+}
+
+button {
+	border-radius: 2px;
+	border: 1px solid transparent;
+	border-color: #ccc;
+	background-color: #fff;
+	color: #333;
+	padding: 6px 12px;
+	font-size: 14px;
+	vertical-align: middle;
+	text-align: center;
+	margin-bottom: 0;
+    font-size: 14px;
+    font-weight: normal;
+    line-height: 1.42857143;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    font-family: inherit;
+
+}
+
+button:hover {
+	background-color: #e6e6e6;
+	border-color: #adadad;
+}
+
+#content {
+	margin: 0 auto;
+	width: 90%;
+}
+
+#link {
+	position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 998;
+    width: 100%;
+    height: 50px;
+    background: #eee;
+    padding-top: 10px;
+    text-align: center;
+}
+
+
+.flex {
+    display: flex !important;
+}
+
+.flex.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.flex.flex-column {
+    flex-direction: column;
+}
+
+.flex-grow-1 {
+    flex-grow: 1 !important;
+}
+
+.results {
+    margin-left: -10px;
+    margin-right: -10px;
+    margin-top: 60px;
+}
+
+.results .result {
+    width: 18%;
+    min-width: 200px;
+    max-width: 240px;
+    margin: auto;
+    padding: 0 10px 20px 10px;
+}
+
+.result .thumbnail{
+    padding: 0;
+    margin-bottom: 5px;
+    position: relative;
+    line-height: 1.42857143;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    -webkit-transition: border .2s ease-in-out;
+    -o-transition: border .2s ease-in-out;
+    transition: border .2s ease-in-out;
+}
+
+
+.result .photo {
+    min-height: 210px;
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+}
+
+.result .overlay {
+    position: absolute;
+    top: 180px;
+    background-color: rgba(0,0,0,0.3);
+    color: white;
+    width: calc(100% - 20px);
+    line-height: 30px;
+    padding: 0 10px;
+}
+
+
+.result .caption {
+    padding: 9px;
+}
+
+.sciname, .common-name {
+    display: block;
+}
+
+.sciname {
+	font-style: italic;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.common-name {
+    color: #aaa;
+}
+
+
+
+#instructions {
+	width: 800px;
+}
+
+#filters {
+	width: 900px;
+}
+
+.popover {
+	border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 6px;
+    padding: 10px 10px 15px 10px;
+	display: none;
+	background-color: #eee;
+}
+
+.col {
+	float: left;
+	width: calc(33.33333333% - 30px);
+    position: relative;
+    min-height: 1px;
+    padding-right: 15px;
+    padding-left: 15px;
+    text-align: left;
+}
+
+.subcol {
+	width: 50%;
+	height: 70px;
+	float: left;
+}
+
+
+.col-left {
+	margin-left: -10px;
+}
+.col-center {
+    border-left: 1px solid #ccc;
+    border-right: 1px solid #ccc;
+    width: calc(33.33333333% - 32px);
+    min-height: 418px;
+}
+
+.sectionlabel {
+	font-weight: bold;
+	font-size: 16px;
+}
+
+.row {
+	font-size: 14px;
+    margin-right: -15px;
+    /*margin-left: -15px;*/
+    margin-bottom: 10px;
+}
+
+.checkboxlabel {
+	min-height: 20px;
+    padding-left: 20px;
+    margin-bottom: 0;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.badge{
+	position: relative;
+    top: -1px;
+    display: inline-block;
+    min-width: 10px;
+    padding: 3px 7px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    background-color: #777;
+    border-radius: 10px;
+}
+
+#filters i.fa {
+    font-size: 18px;
+    width: 18px;
+    background-color: #eee;
+    padding: 7px 4px 6px 4px;
+    margin: -2px -6px 0px 0px;
+    position: relative;
+    vertical-align: middle;
+    text-align: center;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 2px 0px 0px 2px;
+
+}
+
+input[type='text'] {
+	padding: 8px;
+	width: 85%;
+	border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 2px;
+    position: relative;
+    z-index: 1;
+}
+
+input[type='date'] {
+	padding: 5px;
+	width: 150px;
+	border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 2px;
+    margin-bottom: 5px;
+    cursor: text;
+}
+
+input[type='radio'] {
+	cursor: pointer;
+}
+
+.dropdown {
+	cursor: pointer;
+    height: 34px;
+    padding: 6px 12px;
+    color: #555;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);
+    -webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    -o-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+}
+
+.date {
+	font-weight: bold;
+	display: block;
+	padding: 5px;
+	margin-top: 5px;
+	margin-left: 20px;
+
+}
+
+.checkbox{
+	cursor: pointer;
+}
+
+.subcol .checkbox {
+	display: block;
+}
+
+.radio {
+	font-weight: bold;
+	display: block;
+	margin-bottom: 10px;
+	cursor: pointer;
+}
+
+.radio-inline {
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+
+.hidden {
+	display: none;
+}
+
+#reviewed-input {
+	margin-top: 10px;
+}
+
+.url {
+	color: #2b7efa
+}
+.url:hover {
+	text-decoration: underline;
+}
+
+.ui-menu {
+	font-size: 0.85em;
+}
+
+/* Makes sure the autocomplete dialog is shown on top of the filter window */
+.ui-autocomplete {
+	z-index: 999 !important;
+}
+
+/* Styling for place types in autocomplete dropdown */
+.ui-menu-sublabel {
+    font-size: 0.8em;
+    color: #0066FF;
+}
+
+
+
+
+/* Styling for taxon autocomplete dropdown */
+
+.ui-menu-picker {
+     min-width: 350px;
+     display: flex;
+     cursor: pointer;
+}
+
+.ui-menu-thumb img {
+     width: 40px;
+     height: 40px;
+     margin: 2px 7px 2px -3px;
+}
+
+.ui-menu-label {
+     flex: auto;
+     display: block;
+     margin-top: 2px;
+}
+
+.ui-menu-label .title{
+/*     font-size: 0.8em;*/
+}
+
+.ui-menu-label .subtitle {
+     font-size: .8em;
+     display: block;
+     color: #727272;
+     line-height: 14px;
+}
+
+#instructions li {
+	margin-bottom: 0.3em;
+}
+
+
+
+
+</style>
+
+
+</head>
+
+<body>
+<div id="content">
+
+	<div id="link">
+		<button type="button" id="inst">
+			<i class="fa fa-info"></i> 
+			Instructions
+		</button> 
+		<button type="button" id="filt">
+			<i class="fa fa-sliders"></i> 
+			Filters
+			&nbsp;
+			<span class="badge" style="display: none;">3</span>
+		</button> 
+		<button type="button" id="identify" title="Open the iNaturalist identify view with the current filters and the taxa listed below. 
+Scroll down for more taxa.">
+			<i class="fa fa-leaf"></i> 
+			Identify All Taxa
+		</button>
+		<div id="instructions" class="popover">
+			<div style="font-weight: bold; margin-bottom: 0.5em;">Species Count Tool - By James Mickley (
+				<a href="https://www.inaturalist.org/people/mickley" target="_blank">@mickley</a>)
+			</div>
+			<div style="text-align: left;">
+				This tool takes advantage of the iNaturalist <a href="https://api.inaturalist.org/v1/docs/#!/Observations/get_observations_species_counts" target="_blank">observations/species_count</a> API to return a list of taxa and the number of observations for a given set of filters. It is especially useful as a data cleaning tool for finding species with few observations that might be incorrectly identified, cultivated, rare, interesting, or in need of more observations to be included in the vision model.<br/><br/>
+				<strong>Instructions: </strong>
+				<ul>
+					<li>Use the <strong>Filters</strong> button to construct a search, for example, restricting to a place or project.</li>
+					<li>Click the <strong>Identify All Taxa</strong> button to to load all observations of the displayed taxa in iNaturalist's Identify view.</li>
+					<li>Click on the photo or number of observations of a taxon to load only that taxon in Identify view.</li>
+					<li>Click on the taxon name to open the iNaturalist taxon profile page.</li>
+
+				</ul>
+				<strong>Tips: </strong>
+				<ul>
+					<li>Searches can be shared by copying the page URL.</li>
+					<li>The tool loads ~100 taxa at a time. Scroll down to the bottom of the page to load more taxa.</li>
+					<li>The <em>introduced, native, threatened, and endemic</em> terms rely on iNaturalist data that may not be correct for a given place.</li>
+					<li>Unfortunately, the tool is not able to return taxa below the species level, though you can restrict the high species rank to subspecies and below.</li>
+					<li>The number of observations applies to the <em>search terms</em>; it may not include all observations in a particular place. For example, if searching for Needs ID, common taxa may pop up with one observation.</li>
+					<li>Filtering by Total Observations per Taxon (worldwide) is useful for finding under-observed taxa to target for the vision model.</li>
+					<li>Filtering by Observations per Taxon or Total Observations per taxon can be slow, potentially requiring many API calls. Give these options time to load.</li>
+					<li>Exclude observations you've already looked at by setting Reviewed to no, and adding your username as the reviewer.</li>
+
+				</ul>
+			</div>
+
+		</div>
+		<div id="filters" class="popover">
+			<div class="col col-left">
+				<div class="row">
+					<label class="sectionlabel">Quality Grade</label> <small class="text-muted">(Select At Least One)</small>
+				</div>
+				<div class="row">
+					<label class="checkbox"><input type="checkbox" class="quality" name="casual">Casual</label>
+					<label class="checkbox"><input type="checkbox" class="quality" name="needs_id">Needs ID</label>
+					<label class="checkbox"><input type="checkbox" class="quality" name="research">Research Grade</label>
+				</div>
+				<div class="row"><label class="sectionlabel">Show</label></div>
+				<div class="row">
+					<div class="subcol">
+						<label class="checkbox"><input type="checkbox" name="captive">Captive</label>
+						<label class="checkbox"><input type="checkbox" name="introduced">Introduced</label>
+						<label class="checkbox"><input type="checkbox" name="native">Native</label>
+					</div>
+					<div class="subcol">
+						<label class="checkbox"><input type="checkbox" name="threatened">Threatened</label>
+						<label class="checkbox"><input type="checkbox" name="endemic">Endemic</label>
+					</div>
+				</div>
+				<div class="row"><label class="sectionlabel">Person</label></div>
+				<div class="row">
+					<i class="fa fa-user"></i> 
+					<input id="user_login" name="user_login" type="text" placeholder="Username">
+					<input type="hidden" name="user_id" value="">
+				</div>
+
+				
+				<div class="row"><label class="sectionlabel">Project</label></div>
+
+				<div class="row">
+					<i class="fa fa-briefcase"></i> 
+					<input id="project" name="project" type="text" placeholder="Project Name">
+					<input type="hidden" id="project_id" name="project_id" value="">
+				</div>
+				<div class="row"><label class="sectionlabel">Place</label></div>
+				<div class="row">
+					<i class="fa fa-globe"></i> 
+					<input id="place" name="place" type="text" placeholder="Place">
+					<input type="hidden" id="place_id" name="place_id" value="">
+				</div>
+				<div class="row" style="text-align: center"><a class="url" title="These parameters can be manually added to the page URL to enable additional filtering." href="https://api.inaturalist.org/v1/docs/#!/Observations/get_observations_species_counts:~:text=Parameters-,Parameter,Value,-Description" target="_blank">More supported url parameters</a></div>
+				<div class="row" style="margin-top: 20px; margin-bottom: 0px">
+					<button type="button" id="update-search">Update Search</button>
+					<button type="button" id="reset">Reset Filters</button>
+				</div>
+			</div>
+			<div class="col col-center">
+				<div class="row"><label class="sectionlabel">Taxon</label></div>
+				<div class="row">
+					<i class="fa fa-leaf"></i> 
+					<input id="taxon" name="taxon" type="text" placeholder="Taxon Name" onchange="" class="ui-autocomplete-input" autocomplete="off">
+					<input type="hidden" id="taxon_id" name="taxon_id" value="">
+				</div>
+				<div class="row"><label class="sectionlabel">Rank</label></div>
+
+				<div class="row">
+					<select name="hrank" class="dropdown">
+						<option value="">High</option>
+						<option value="kingdom">Kingdom</option>
+						<option value="phylum">Phylum</option>
+						<option value="subphylum">Subphylum</option>
+						<option value="superclass">Superclass</option>
+						<option value="class">Class</option>
+						<option value="subclass">Subclass</option>
+						<option value="infraclass">Infraclass</option>
+						<option value="subterclass">Subterclass</option>
+						<option value="superorder">Superorder</option>
+						<option value="order">Order</option>
+						<option value="suborder">Suborder</option>
+						<option value="infraorder">Infraorder</option>
+						<option value="parvorder">Parvorder</option>
+						<option value="zoosection">Zoosection</option>
+						<option value="zoosubsection">Zoosubsection</option>
+						<option value="superfamily">Superfamily</option>
+						<option value="epifamily">Epifamily</option>
+						<option value="family">Family</option>
+						<option value="subfamily">Subfamily</option>
+						<option value="supertribe">Supertribe</option>
+						<option value="tribe">Tribe</option>
+						<option value="subtribe">Subtribe</option>
+						<option value="genus">Genus</option>
+						<option value="genushybrid">Genushybrid</option>
+						<option value="subgenus">Subgenus</option>
+						<option value="section">Section</option>
+						<option value="subsection">Subsection</option>
+						<option value="complex">Complex</option>
+						<option value="species">Species</option>
+						<option value="hybrid">Hybrid</option>
+						<option value="subspecies">Subspecies</option>
+						<option value="variety">Variety</option>
+						<option value="form">Form</option>
+						<option value="infrahybrid">Infrahybrid</option>
+					</select>
+					<select name="lrank" class="dropdown">
+						<option value="">Low</option>
+						<option value="kingdom">Kingdom</option>
+						<option value="phylum">Phylum</option>
+						<option value="subphylum">Subphylum</option>
+						<option value="superclass">Superclass</option>
+						<option value="class">Class</option>
+						<option value="subclass">Subclass</option>
+						<option value="infraclass">Infraclass</option>
+						<option value="subterclass">Subterclass</option>
+						<option value="superorder">Superorder</option>
+						<option value="order">Order</option>
+						<option value="suborder">Suborder</option>
+						<option value="infraorder">Infraorder</option>
+						<option value="parvorder">Parvorder</option>
+						<option value="zoosection">Zoosection</option>
+						<option value="zoosubsection">Zoosubsection</option>
+						<option value="superfamily">Superfamily</option>
+						<option value="epifamily">Epifamily</option>
+						<option value="family">Family</option>
+						<option value="subfamily">Subfamily</option>
+						<option value="supertribe">Supertribe</option>
+						<option value="tribe">Tribe</option>
+						<option value="subtribe">Subtribe</option>
+						<option value="genus">Genus</option>
+						<option value="genushybrid">Genushybrid</option>
+						<option value="subgenus">Subgenus</option>
+						<option value="section">Section</option>
+						<option value="subsection">Subsection</option>
+						<option value="complex">Complex</option>
+						<option value="species">Species</option>
+						<option value="hybrid">Hybrid</option>
+						<option value="subspecies">Subspecies</option>
+						<option value="variety">Variety</option>
+						<option value="form">Form</option>
+						<option value="infrahybrid">Infrahybrid</option>
+					</select>
+				</div>
+				<div class="row"><label class="sectionlabel">Reviewed</label></div>
+				<div class="row">
+					<label class="radio-inline"><input type="radio" name="reviewed" value="any">Any</label>
+					<label class="radio-inline"><input type="radio" name="reviewed" value="true">Yes</label>
+					<label class="radio-inline"><input type="radio" name="reviewed" value="false">No</label>
+					<div id="reviewed-input" class="hidden">
+						<i class="fa fa-user"></i> 
+						<input id="viewer_login" name="viewer_login" type="text" placeholder="Reviewer Username or User ID" class="ui-autocomplete-input" autocomplete="off">
+						<input type="hidden" id="viewer_id" name="viewer_id" value="">
+					</div>
+				</div>
+				<div class="row"><label class="sectionlabel">Observations per Taxon</label><br/>
+					<small>(For current filter settings)</small>
+				</div>
+				<div class="row">
+					<input name="min_obs" type="text" placeholder="Minimum" style="width: 125px;">
+					<input name="max_obs" type="text" placeholder="Maximum" style="width: 125px;">
+				</div>
+				<div class="row">
+					<label class="sectionlabel">Total Observations per Taxon</label><br/>
+					<small>(Worldwide: Irrespective of filter settings)</small>
+				</div>
+				<div class="row">
+					<input name="min_global_obs" type="text" placeholder="Minimum" style="width: 125px;">
+					<input name="max_global_obs" type="text" placeholder="Maximum" style="width: 125px;">
+				</div>
+			</div>
+
+			<div class="col">
+				<div class="row"><label class="sectionlabel">Date Observed</label></div>
+				<div class="row" style="margin-bottom: 20px;">
+					<label class="radio"><input type="radio" name="obs-date" value="any" checked="">Any</label>
+					<label class="radio"><input type="radio" name="obs-date" value="exact">Exact Date</label>
+					<div id="obs-date-exact" class="hidden" style="margin-left: 25px;">
+						<input name="observed_on" type="date" max="<?php echo $today;?>" onchange="">
+					</div>
+					<label class="radio"><input type="radio" name="obs-date" value="range">Range</label>
+					<div id="obs-date-range" class="hidden" >
+						<div style="float: left; width: 25%;">
+							<label class="date">Start: </label>
+							<label class="date">End: </label>
+						</div>
+						<div style="float: left; width: 75%; margin-bottom: 10px;">
+							<input name="d1" type="date" max="<?php echo $today;?>" onchange="">
+							<input name="d2" type="date" max="<?php echo $today;?>" onchange="">
+						</div>
+					</div>
+				</div>
+				
+
+
+				<div class="row"><label class="sectionlabel">Date Added</label></div>
+				<div class="row" style="margin-bottom: 20px;">
+					<label class="radio"><input type="radio" name="create-date" value="any" checked="">Any</label>
+					<label class="radio"><input type="radio" name="create-date" value="exact">Exact Date</label>
+					<div id="create-date-exact" class="hidden" style="margin-left: 25px;">
+						<input name="created_on" type="date" max="<?php echo $today;?>" onchange="">
+					</div>
+					<label class="radio"><input type="radio" name="create-date" value="range">Range</label>
+					<div id="create-date-range" class="hidden">
+						<div style="float: left; width: 25%;">
+							<label class="date">Start: </label>
+							<label class="date">End: </label>
+						</div>
+						<div style="float: left; width: 75%;">
+							<input name="created_d1" type="date" max="<?php echo $today;?>" onchange="">
+							<input name="created_d2" type="date" max="<?php echo $today;?>" onchange="">
+						</div>
+					</div>
+				</div>
+				<div class="row"><label class="sectionlabel">Sort Order</label></div>
+				<div class="row">
+					<label class="">Observations per Taxon: </label>
+					<select name="order" class="dropdown">
+						<option value="">Descending</option>
+						<option value="asc">Ascending</option>
+					</select>
+				</div>
+				<!--
+				Sort Order = order = asc or desc
+				Out of Range = out_of_range = true
+				Identified by = ident_user_id
+				Per Page = per_page (max 500)
+				-->
+			</div>
+		</div>
+	</div>
+	
+	<div id="results" class="results flex flex-wrap">
+	</div>
+
+</div>
+
+</body>
+</html>

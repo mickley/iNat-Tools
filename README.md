@@ -13,7 +13,7 @@ The [ID Progress Bar](id-progress.html) widget shows a configurable progress bar
 
 The [ID Leaderboard](id-leaderboard.html) widget shows a leaderboard of identifications by user for an ID-A-Thon event. It can be embedded in a journal post on iNaturalist as an iFrame. 
 
-<iframe src="https://mickley.github.io/iNat-Tools/id-leaderboard.html?own_observation=false&is_change=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00" height="300" width="450" frameborder="0"><iframe>
+<iframe src="https://mickley.github.io/iNat-Tools/id-leaderboard.html?own_observation=false&is_change=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00" height="300" width="450" frameborder="0"></iframe>
 
 # Tools for Identifying
 

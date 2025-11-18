@@ -1,0 +1,19 @@
+# Site settings
+title: iNat-Tools
+email: your-email@example.com
+description: >- # this means to ignore newlines until "baseurl:"
+  Tools for working with iNaturalist data via the iNaturalist API
+#baseurl: "" # the subpath of your site, e.g. /blog
+#url: "https://yourusername.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+github_username: mickley # Optional: Your GitHub username
+#twitter_username: your_twitter_handle # Optional: Your Twitter username
+show_downloads: false # Set to false to hide the "Download" links
+
+# Build Settings
+theme: jekyll-theme-architect
+markdown: kramdown # default
+theme: jekyll-theme-minimal # Or another supported GitHub Pages theme, e.g., jekyll-theme-cayman
+plugins:
+  - jekyll-seo-tag
+  # Add other Jekyll plugins here if needed
+  # - jekyll-remote-theme # Uncomment and use with remote_theme if not using a supported GitHub Pages theme

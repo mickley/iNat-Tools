@@ -665,7 +665,7 @@
 						response($.map(data.results, function(item) {
 							return {
 								label: item.display_name,
-								type: place_types[item.place_type],
+								type: iNat.place_types[item.place_type],
 								value: item.id
 							}
 					   }));

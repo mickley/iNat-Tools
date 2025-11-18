@@ -19,7 +19,7 @@ The [ID Leaderboard](id-leaderboard.html) widget shows a leaderboard of identifi
 
 ## Species Count Tool
 
-The [Species Count](speciescount.html) tool displays a list of taxa and the number of observations for each taxon for a given set of filters. It can be used to find species with few observations that might be incorrectly identified, cultivated, rare, otherwise interesting, or in need of more observations to be included in the vision model. For example, [this link](https://herbarium.science.oregonstate.edu/iNat-Tools/speciescount.html?reviewed=any&quality_grade=needs_id%2Cresearch&order=asc&project_id=168279&max_obs=1) shows all of the species in the Flora of Oregon: Vascular Plants project that have only been observed once.
+The [Species Count](speciescount.html?place_id=1&taxon_id=40151) tool displays a list of taxa and the number of observations for each taxon for a given set of filters. It can be used to find species with few observations that might be incorrectly identified, cultivated, rare, otherwise interesting, or in need of more observations to be included in the vision model. For example, [this link](speciescount.html?reviewed=any&quality_grade=needs_id%2Cresearch&order=asc&project_id=168279&max_obs=1) shows all of the species in the [Flora of Oregon: Vascular Plants](https://www.inaturalist.org/projects/flora-of-oregon-vascular-plants) project that have only been observed once.
  
 # iNatJS Javascript Wrapper Library
 

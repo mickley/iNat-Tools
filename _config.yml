@@ -12,7 +12,6 @@ show_downloads: false # Set to false to hide the "Download" links
 # Build Settings
 theme: jekyll-theme-architect
 markdown: kramdown # default
-theme: jekyll-theme-minimal # Or another supported GitHub Pages theme, e.g., jekyll-theme-cayman
 plugins:
   - jekyll-seo-tag
   # Add other Jekyll plugins here if needed

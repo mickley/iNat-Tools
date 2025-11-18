@@ -514,7 +514,7 @@ https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin
 			 <p>iNaturalist Identifications by ID category</p>
 		</canvas>
 	</div>
-	<div id="instructions">
+	<div id="instructions" style="margin-left: 20px;">
 		<h2>iNaturalist identification goal progress</h2>
 		Intended for tracking statistics for ID-a-thons, this widget uses the iNaturalist <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_categories">identifications/categories</a> API to construct a progress bar of identifications for a certain period of time.
 		<br/>
@@ -525,7 +525,7 @@ https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin
 		Any variables from the <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_identifiers">api reference</a> can be added as link parameters to constrain the progress bar, and this help text will disappear when embedded in an iframe within a journal post. The following iNaturalist variables are especially relevant:
 		<ul>
 			<li><b>own_observation=false</b>: Include this if you do not want to include identifications of a users own observations in the statistics. </li>
-			<li><b>d1 & d2</b>: start and end dates. To account for timezones, use this format: 2024-11-09T00:00-08:00<, where -08:00 is the offset from UTC.</li>
+			<li><b>d1 & d2</b>: start and end dates. To account for timezones, use ISO 8601 format: 2024-11-09T00:00-08:00, where -08:00 is the offset from UTC. (YYYY-MM-DDTHH:mm:ss+/-HH:mm</li>
 		</ul>
 		Additionally, the following variables can be specified:
 		<ul>

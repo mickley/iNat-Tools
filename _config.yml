@@ -2,7 +2,7 @@
 title: iNat-Tools
 email: your-email@example.com
 description: >- # this means to ignore newlines until "baseurl:"
-  Tools for working with iNaturalist data via the iNaturalist API
+  Tools by James Mickley for working with the iNaturalist API
 #baseurl: "" # the subpath of your site, e.g. /blog
 #url: "https://yourusername.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 github_username: mickley # Optional: Your GitHub username

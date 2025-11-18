@@ -1,0 +1,213 @@
+<html>
+<head>
+<title>iNaturalist Identifier Leaderboard</title>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.14.1/dist/jquery-ui.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/gh/mickley/iNatJS@main/inatjs.js" type="text/javascript"></script>
+<script>
+
+	// Make a new class instance
+	const iNat = new iNatJS();
+
+	// On page load
+	$(function(){
+
+		const inIframe = () => window.self !== window.top;
+		const currentDate = new Date().toISOString().split('T')[0];
+
+		// Test if the page is loaded in an iframe and hide instructions if so
+		if (inIframe()) $('#instructions').hide();
+
+		// Get a list of URL parameters passed to the page when it is loaded
+		params = iNat.getUrlParams(location.search);
+
+		// If no parameters are specified, update to show an example
+		if (Object.keys(params).length === 0) {
+
+			// Construct the URL
+			let url = '/iNat-Tools/id-leaderboard.html?own_observation=false&is_change=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00'
+  
+  			// Reload the page with the example
+			location.href = url;
+		}
+
+		// Query the API for a list of identifiers
+		getIdentifiers();
+
+	});
+
+
+	// Get a list of identifiers from the API
+	function getIdentifiers() {
+
+		// Default to a list of 100 if per_page is not specified
+		if(!("per_page" in params)) params.per_page = 100;
+
+		var fields = {
+		   count: "",
+		   user: {
+		      login: "", 
+		      icon: "",
+		      icon_url: ""
+		   }
+		}
+
+		// Get the data from iNaturalist
+		iNat.queueINatRequest({
+		     method: 'GET',
+		     apiVersion: "v2",
+		     endpoint: "identifications/identifiers",
+		     params: params,
+		     fields: iNat.toRISON(fields),
+		     success: function(data) {
+		        //console.log(data.results);
+		        makeTable(data);
+		     }, 
+		     error: function(xhr, status, error) {
+		        console.log(status + ' ' + xhr.status + ': ' + error);
+		     }
+		 });
+		return true;
+	}
+
+
+	// Make a table of identifiers for the leaderboard
+	function makeTable(data) {
+		let html = '<table id="results"><thead><tr><th>Rank</th><th></th><th>User</th><th>Identifications</th></tr></thead><tbody>';
+		let rank = 0;
+
+		// For each identifier returned
+		for (record of data.results) {
+
+			// Keep track of the identifier's rank in the leaderboard
+			rank++;
+
+			// Get a thumbnail image for the identifier
+			let thumb = (record.user.icon != null ? record.user.icon : 'https://www.inaturalist.org/attachment_defaults/users/icons/defaults/thumb.png');
+
+			// Construct a table for the identifier leaderboard
+			html += '<tr>';
+			html += '<td class="center">' + rank +  '</td>';
+			html += '<td><a class="userimage" href="https://www.inaturalist.org/people/' + record.user.login + '" title="' + record.user.login + '" style="background-image: url(\'' + thumb + '\');" target="_blank"></a></td>';
+			html += '<td><div><a class="userlink" href="https://www.inaturalist.org/people/' + record.user.login + '" title="' + record.user.login + '" target="_blank">' + record.user.login + '</a></div><div class="small">(<a class="userlink" href="https://jumear.github.io/stirfry/iNat_identifier_stats?user_id=' + record.user.login + '" target="_blank">ID stats</a>)</div></td>';
+			html += '<td class="center">' + record.count + '</td>';
+			html += '</tr>';
+
+		}
+
+		html += '</tbody></table>';
+
+		// Add the results to the results div
+   		$('#leaderboard').append(html);
+	}
+
+</script>
+
+<style>
+
+	/* Lato font */
+	@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap');
+
+	body {
+	    font-family: Lato,"Trebuchet MS",Arial,sans-serif;
+	    color: #333;
+	}
+
+	#instructions {
+		width: 700px;
+		margin-bottom: 20px;
+	}
+
+	code {
+		text-wrap: wrap;
+		padding: 5px;
+	}
+
+	table {
+		position: relative;
+		border-collapse: collapse;
+	}
+
+	thead th{
+		position: sticky;
+		background: white;
+		top: 0;
+		height: 35px;
+		border-bottom: 2px solid #DDD;
+		padding: 0px 10px;
+	}
+
+	tbody tr {
+		height: 50px;
+	}
+
+	tbody tr:not(:last-child) {
+	    border-bottom: 2px solid #DDD;
+	}
+
+	tbody tr:nth-child(odd) {
+	  background-color: #EEE;
+
+	}
+
+	.center {
+		text-align: center;
+	}
+
+	.small {
+		font-size: 0.8em;
+	}
+
+	.userimage {
+		display: inline-block;
+		margin-right: 10px;
+		width: 40px;
+		height: 40px;
+		background-size: cover;
+		background-position: center;
+		background-color: #aaa;
+		border-radius: 120px;
+	    border: 2px solid white;
+	    vertical-align: middle;
+	}
+
+	a.userimage:hover {
+		opacity: 0.7;
+	}
+
+	.userlink {
+		color: #1b75d0;
+		text-decoration: none;
+	}
+
+	a.userlink:hover{
+		color: #3e9eff;
+		text-decoration: underline;
+	}
+
+</style>
+
+<!-- Load HighlightJS to highlight code example -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/default.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</head>
+<body>
+	<div id="instructions" style="margin-left: 20px;">
+		<h2>iNaturalist identifier leaderboard</h2>
+		Intended for tracking statistics for ID-A-Thons, this widget uses the iNaturalist <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_identifiers">identifications/identifiers</a> API to construct a leaderboard of identifiers, e.g., for a particular time period. It also links to [jumear's iNat Identifier Stats tool](https://jumear.github.io/stirfry/iNat_identifier_stats). For example, the following restricts the leaderboard to vascular plants in Oregon on 11/09/24:
+		<pre>
+			<code>
+&lt;iframe src="https://mickley.github.io/iNat-Tools/id-leaderboard.html?own_observation=false&is_change=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00" height="300" width="450" frameborder="0"&gt;&lt;iframe&gt;
+			</code>
+		</pre>
+		Any variables from the <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_identifiers">api reference</a> can be added as link parameters to constrain the leaderboard, and this help text will disappear when embedded in an iframe within a journal post on iNaturalist. The following iNaturalist variables are especially relevant:
+		<ul>
+			<li><b>own_observation=false</b>: Include this if you do not want to include identifications of a users own observations in the statistics. </li>
+			<li><b>is_change=false</b>: Include this to avoid including identifications added as a result of a taxon change. </li>
+			<li><b>d1 & d2</b>: start and end dates. To account for timezones, use ISO 8601 format: 2024-11-09T00:00-08:00, where -08:00 is the offset from UTC. (YYYY-MM-DDTHH:mm:ss+/-HH:mm</li>
+		</ul>
+	</div>
+	<div id="leaderboard"></div>
+</body>
+</html>

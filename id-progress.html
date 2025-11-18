@@ -1,0 +1,533 @@
+<html>
+<head>
+<title>iNaturalist Identification Progress</title>
+<!-- jQuery JavaScript Library v1.9.1  jQuery UI - v1.10.3-->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.14.1/dist/jquery-ui.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/gh/mickley/iNatJS@main/inatjs.js" type="text/javascript"></script>
+<script>
+
+	// Make a new class instance
+	const iNat = new iNatJS();
+
+	const categories = {
+		supporting: 0,
+		leading: 0, 
+		improving: 0, 
+		maverick: 0, 
+		total: 0
+	};
+
+	const tooltip = {
+		supporting: 'Taxon is the same as the community taxon. This identification supports the community ID.', 
+		leading: 'Taxon descends from the community taxon. This identification could be leading toward the right answer.', 
+		improving: 'First suggestion of this taxon that the community subsequently agreed with. This identification helped refine the community taxon.',
+		maverick: 'Taxon is not a descendant or ancestor of the community taxon. The community does not agree with this identification.'
+
+	}
+
+	let chart = {};
+
+	// Get a list of URL parameters passed to the page when it is loaded
+	let params = iNat.getUrlParams(location.search);
+	const name = params.name && params.name != null ? params.name : 'Campaign';
+	const namecomp = params.namecomp && params.namecomp != null ? params.namecomp : 'Comparison';
+
+	let comp = false
+
+	if (params.d1comp || params.d2comp) comp = true;
+
+	// 
+	const goal = params.goal && params.goal != null ? params.goal : 0;
+	const mindisp = params.mindisp && params.mindisp != null ? params.mindisp : 0;
+	let total = comptotal = 0;
+	let hovering = false;
+
+
+	// Chart data
+	const dataset = {
+		labels: [name],
+		datasets: [
+			{
+	  		type: 'bar',
+	      label: 'Supporting',
+	      data: [0],
+	      backgroundColor: "#36A2EBA0",
+	      borderColor: "#36A2EB"
+	    }, 
+	    {
+	    	type: 'bar',
+	      label: 'Improving',
+	      data: [0], 
+	      backgroundColor: "#4BC0C0A0",
+	      borderColor: "#4BC0C0"
+
+	    }, 
+	    {
+	    	type: 'bar',
+	      label: 'Leading',
+	      data: [0],
+	      backgroundColor: "#9966FFA0",
+	      borderColor: "#9966FF"
+	    }, 
+	    {
+	    	type: 'bar',
+	      label: 'Maverick',
+	      data: [0],
+	      backgroundColor: "#FF9F40A0",
+	      borderColor: "#FF9F40"
+	    }, 
+		]
+	};
+
+
+	// Chart options
+	const chartOptions = {
+    indexAxis: 'y',
+    aspectRatio: 3.5,
+    responsive: true,
+    scales: {
+      y: {
+        beginAtZero: true,
+        stacked: true
+      },
+      x: {
+      	stacked: true, 
+      	suggestedMax: 0,
+      }
+    }, 
+    datasets: {
+    	bar: {
+    		barPercentage: 1,
+    		categoryPercentage: 0.9,
+    		borderWidth: 3,
+    	}
+    },
+
+    plugins: {
+  		legend: {
+  			position: 'bottom',
+			  onHover: (evt, legendItem) => {
+			    const activeElement = {
+			      datasetIndex: legendItem.datasetIndex,
+			      index: 0 // legendItem.index
+			    };
+			    chart.tooltip.setActiveElements([activeElement]);
+			    chart.update();
+			  }
+  		}, 
+	    tooltip: {
+	    	boxPadding: 5,
+    		callbacks: {
+      		footer: function(context){
+      			let label = context[0].dataset.label || '';
+      			return tooltip[label.toLowerCase()].match(/.{1,60}[ \.]/g);
+      		},
+    		}
+  		}
+  	},
+  };
+
+  // Add a goal annotation to the chartOptions
+	if (goal) chartOptions.plugins.annotation = {
+    annotations: {
+      line1: {
+        type: 'line',
+     	  label: {
+     	  	content: ['Goal:', goal, 'IDs'], 
+     	  	display: true
+     	  },
+        xMin: goal,
+        xMax: goal,
+        borderColor: 'rgb(255, 99, 132)',
+        borderWidth: 3,
+      }
+    }
+  }
+
+	// On page load
+	$(function(){
+
+		const inIframe = () => window.self !== window.top;
+		const currentDate = new Date().toISOString().split('T')[0];
+
+		// Test if the page is loaded in an iframe and hide instructions if so
+		if (inIframe()) $('#instructions').hide();
+
+		// Restrict to current date if no parameters are specified (minimizes load time)
+		if (Object.keys(params).length === 0) {
+
+			// Add parameter
+			params.d1 = currentDate;
+
+			// Construct the URL
+			let url = '/iNat/id-progress.php?' + $.param(params);
+
+			// Update in browser
+			history.pushState(null, '', url);    
+		}
+
+		// Query the API for a list of identifiers
+		getIdentifications();
+
+		if (comp) {
+			dataset.labels.push(namecomp);
+			getIdentifications(comp);
+		}
+
+	});
+
+
+	// Get a list of identifiers from the API
+	function getIdentifications(comp) {
+
+		if(comp) {
+			params.d1 = params.d1comp
+			params.d2 = params.d2comp
+		}
+
+		// Get the data from iNaturalist
+		iNat.queueINatRequest({
+		     method: 'GET',
+		     apiVersion: "v1",
+		     endpoint: "identifications/categories",
+		     params: deleteKeys(params, ['goal']),
+		     success: function(data) {
+
+		     		console.log(data);
+
+		        // Save the identifications for each category
+		        data.results.map(function (category) {
+
+		        	// Get dataset index number using the category label
+		        	let idx = dataset.datasets.findIndex((x) => x.label.toLowerCase() == category.category);
+
+		        	
+
+		        	// Save the count to the correct category dataset
+		        	if(comp) {
+		        		comptotal += category.count;
+		        		dataset.datasets[idx].data[1] = category.count;
+		        		
+		        	} else {
+		        		// Compute the total identifications
+		        		total += category.count;
+		        		dataset.datasets[idx].data[0] = category.count;
+		        		
+		        	}
+
+		        });
+		       	
+		       	if(comp){
+
+		       		// Add annotation for total number
+							chart.options.plugins.annotation.annotations.label2 = {
+					      type: 'label',
+					      xValue: comptotal,
+					      yValue: 1,
+					      position: {x: 'start'},
+					      content: [comptotal],
+					      font: {size: 16}
+					    }
+
+		       		chart.update();
+
+		       	} else {
+		       		displayProgress();
+		       	}
+		        
+		     }, 
+		     error: function(xhr, status, error) {
+		        console.log(status + ' ' + xhr.status + ': ' + error);
+		     }
+		 });
+		return true;
+	}
+
+	function displayProgress(){
+
+		// Determine and set chart max value
+		let max = Math.max(goal, categories.total, mindisp);
+		chartOptions.scales.x.suggestedMax = max;
+		
+		// Add annotation for total number
+		chartOptions.plugins.annotation.annotations.label1 = {
+      type: 'label',
+      xValue: total,
+      yValue: 0,
+      position: {x: 'start'},
+      content: [total],
+      font: {size: 16}
+    }
+
+		// https://chartscss.org/components/axes/
+		// https://www.chartjs.org/docs/latest/samples/bar/stacked.html
+		// https://www.chartjs.org/docs/latest/samples/bar/horizontal.html
+
+		let html = '<div id="graph">';
+		html += '<div class="supporting" title="" style="width: ' + Math.round(categories.supporting / max * 100) + '%"></div>';
+		html += '<div class="improving" title="test" style="width: ' + Math.round(categories.improving / max * 100) + '%"></div>';
+		html += '<div class="leading" title="" style="width: ' + Math.round(categories.leading / max * 100) + '%"></div>';
+		html += '<div class="maverick" title="" style="width: ' + Math.round(categories.maverick / max * 100) + '%"></div>';
+		html += '<div id="goal" style="left: ' + goal / max * 100 + '%"></div>'
+		html += '</div>';
+		html += '<div id="legend">';
+		html += '<div class="supporting" title="">Supporting</div>';
+		html += '<div class="improving" title="">Improving</div>';
+		html += '<div class="leading" title="">Leading</div>';
+		html += '<div class="maverick" title="">Maverick</div>';
+		html += '</div>';
+		//$( document ).tooltip();
+
+		$( document ).tooltip({ 
+			items: '[title]', 
+			position: { my: "center top", at: "center bottom+5", collision: "fit none"},
+			hide: false,
+			content: function (){
+				let tip = $(this).attr('class');
+
+				let tooltiptext = '<strong>' + tip[0].toUpperCase() + tip.slice(1) + ':</strong> ';
+
+				if($(this).parent().attr('id') == 'graph') tooltiptext += categories[tip] + ' Identifications';
+				tooltiptext += '<br/>' + tooltip[tip];
+
+				return tooltiptext ;
+
+			}
+		});
+		//$(".supporting").tooltip({ content: tooltip.supporting });
+
+
+
+		// Add the results to the results div
+   		//$('#container').append(html);
+
+		// https://stackoverflow.com/questions/57164433/how-to-show-tooltip-on-legend-item-in-chart-js
+
+		// Build chart
+ 		chart = new Chart($('#chart'), {
+	    type: 'bar',
+	    data: dataset,
+	    options: chartOptions
+	  });
+	}
+
+
+	// Make a table of identifiers for the leaderboard
+	function makeTable(data) {
+		let html = '<table id="results"><thead><tr><th>Rank</th><th>User</th><th>Identifications</th></tr></thead><tbody>';
+		let rank = 0;
+
+		// For each identifier returned
+		for (record of data.results) {
+
+			// Keep track of the identifier's rank in the leaderboard
+			rank++;
+
+			// Get a thumbnail image for the identifier
+			let thumb = (record.user.icon != null ? record.user.icon : 'https://www.inaturalist.org/attachment_defaults/users/icons/defaults/thumb.png');
+
+			// Construct a table for the identifier leaderboard
+			html += '<tr>';
+			html += '<td class="center">' + rank +  '</td>';
+			html += '<td><a class="userimage" href="https://www.inaturalist.org/people/' + record.user.login + '" title="' + record.user.login + '" style="background-image: url(\'' + thumb + '\');"></a>';
+			html += '<a class="userlink" href="https://www.inaturalist.org/people/' + record.user.login + '" title="' + record.user.login + '">' + record.user.login + '</a></td>';
+			html += '<td class="center">' + record.count + '</td>';
+			html += '</tr>';
+
+		}
+
+		html += '</tbody></table>';
+
+		// Add the results to the results div
+   		$('#leaderboard').append(html);
+	}
+
+	// Function to delete keys from an object
+	function deleteKeys(object, keys) {
+		let newObj = Object.assign({}, object);
+	    for(var i = 0; i < keys.length; i++) {
+	        if(newObj.hasOwnProperty(keys[i])) {
+	            delete newObj[keys[i]];
+	        }
+	    }
+	    return(newObj);
+	};
+
+
+</script>
+
+<style>
+
+	/* Lato font */
+	@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap');
+
+	body {
+	    font-family: Lato,"Trebuchet MS",Arial,sans-serif;
+	    color: #333;
+	}
+
+  .ui-tooltip {
+    padding: 5px 10px;
+    color: #111;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 1px 1px 3px #222222;
+    max-width: 500px;
+  }
+
+
+	#graph {
+		width: 600px;
+		height: 50px;
+		white-space: nowrap;
+		position: relative;
+	}
+	#graph div {
+		height: 100%;
+		display: inline-block;
+	}
+
+  	#goal {
+  		position: absolute;
+  		width: 2px;
+  		border: 1px solid black;
+  		background-color: white;
+  		height: calc(100% + 8px) !important;
+  		top: -5px;
+  	}
+  	#container {
+  		max-width: 700px;
+  		
+  	}
+
+
+	#legend {
+		text-align: center;
+		width: 600px;
+	}
+
+	#legend div {
+		padding: 5px 10px;
+		margin: 10px 10px;
+		display: inline-block;
+		color: white;
+		font-weight: bold;
+	}
+
+	.supporting {
+		background-color: blue;
+	}
+
+	.improving {
+		background-color: purple;
+
+	}
+
+	.leading{
+		background-color: green;
+	}
+
+	.maverick {
+		background-color: orange;
+	}
+
+	#instructions {
+		width: 700px;
+		margin-bottom: 20px;
+	}
+
+	code {
+		text-wrap: wrap;
+		padding: 5px;
+	}
+
+	table {
+		position: relative;
+		border-collapse: collapse;
+	}
+
+	thead th{
+		position: sticky;
+		background: white;
+		top: 0;
+		height: 35px;
+		border-bottom: 2px solid #DDD;
+		padding: 0px 10px;
+	}
+
+	tbody tr {
+		height: 50px;
+	}
+
+	tbody tr:not(:last-child) {
+	    border-bottom: 2px solid #DDD;
+	}
+
+	tbody tr:nth-child(odd) {
+	  background-color: #EEE;
+
+	}
+
+	.center {
+		text-align: center;
+	}
+
+	.userimage {
+		display: inline-block;
+		margin-right: 10px;
+		width: 40px;
+		height: 40px;
+		background-size: cover;
+		background-position: center;
+		background-color: #aaa;
+		border-radius: 120px;
+	    border: 2px solid white;
+	    vertical-align: middle;
+	}
+
+	a.userimage:hover {
+		opacity: 0.7;
+	}
+
+	.userlink {
+		color: #1b75d0;
+		text-decoration: none;
+	}
+
+	a.userlink:hover{
+		color: #3e9eff;
+		text-decoration: underline;
+	}
+
+</style>
+
+<!-- Load HighlightJS to highlight code example -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/default.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="
+https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js
+"></script>
+<script>hljs.highlightAll();</script>
+
+</head>
+<body>
+	<div id="instructions">
+		<h2>iNaturalist identification goal progress</h2>
+		Intended for tracking statistics for ID-a-thons, this widget uses the iNaturalist <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_categories">identifications/categories</a> API to construct a progress bar of identifications for a certain period of time.
+		<br/>
+		For example, the following restricts the identification stats to vascular plants in Oregon between 9/20/24 and 9/26/24:
+		<pre><code>
+&lt;iframe src="https://herbarium.science.oregonstate.edu/iNat/id-progress.php?own_observation=false&place_id=10&taxon_id=211194&d1=2024-09-20T00:00-08:00&d2=2024-09-26T11:59-08:00&goal=10000&name=ID-A-Thon 2024" height="300" width="700" frameborder="0"&gt;&lt;iframe&gt;
+		</code></pre>
+		Any variables from the <a href="https://api.inaturalist.org/v1/docs/#!/Identifications/get_identifications_identifiers">api reference</a> can be added as link parameters to constrain the progress bar, and this help text will disappear when embedded in an iframe within a journal post. Additionally, a goal variable can be specified to track progress against an identification goal, and a name variable can name the campaign. 
+	</div>
+	<div id="container">
+		<canvas id="chart" aria-label="iNaturalist identifications graph" role="img">
+			 <p>iNaturalist Identifications by ID category</p>
+		</canvas>
+	</div>
+</body>
+
+</html>

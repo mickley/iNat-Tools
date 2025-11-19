@@ -1,5 +1,5 @@
 Below are some tools that I have developed to display data from the iNaturalist API. Please feel free to use, credit is appreciated. 
-- James Mickley (<img src="https://static.inaturalist.org/wiki_page_attachments/3154-medium.png" width="20" height="20"></img>[@mickley](https://www.inaturalist.org/people/mickley))
+- James Mickley (<img src="https://static.inaturalist.org/wiki_page_attachments/3154-medium.png" width="20" height="20" style="margin-bottom: -5px;">[mickley](https://www.inaturalist.org/people/mickley))
 
 # Tools for ID-A-Thons
 
@@ -21,6 +21,8 @@ The [ID Leaderboard](id-leaderboard.html) widget shows a leaderboard of identifi
 ## Species Count Tool
 
 The [Species Count](speciescount.html?place_id=1&taxon_id=40151) tool displays a list of taxa and the number of observations for each taxon for a given set of filters. It can be used to find species with few observations that might be incorrectly identified, cultivated, rare, otherwise interesting, or in need of more observations to be included in the vision model. For example, [this link](speciescount.html?reviewed=any&quality_grade=needs_id%2Cresearch&order=asc&project_id=168279&max_obs=1) shows all of the species in the [Flora of Oregon: Vascular Plants](https://www.inaturalist.org/projects/flora-of-oregon-vascular-plants) project that have only been observed once.
+
+<img width="677" height="282" alt="image" src="https://github.com/user-attachments/assets/7d247d1b-9e9d-4a31-b847-c5870d47b2c4" />
  
 # iNatJS Javascript Wrapper Library
 

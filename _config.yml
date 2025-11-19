@@ -8,6 +8,7 @@ description: >- # this means to ignore newlines until "baseurl:"
 github_username: mickley # Optional: Your GitHub username
 #twitter_username: your_twitter_handle # Optional: Your Twitter username
 show_downloads: false # Set to false to hide the "Download" links
+google_analytics: G-6HE441TW1M # Google Analytics Measurement ID
 
 # Build Settings
 theme: jekyll-theme-architect

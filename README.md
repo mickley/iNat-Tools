@@ -7,7 +7,7 @@ Below are some tools that I have developed to display data from the iNaturalist 
 
 The [ID Progress Bar](id-progress.html) widget shows a configurable progress bar of the number of identifications for an ID-A-Thon event. It can be embedded in a journal post on iNaturalist as an iframe.
 
-<iframe src="https://mickley.github.io/iNat-Tools/id-progress.html?own_observation=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00&goal=2000&mindisp=4000&name=ID-A-Thon 2024&d1comp=2024-11-08T00:00-08:00&d2comp=2024-11-08T23:59-08:00&namecomp=Previous Day" height="200" width="700" frameborder="0"></iframe>
+<iframe src="https://mickley.github.io/iNat-Tools/id-progress.html?own_observation=false&taxon_id=211194&place_id=10&d1=2024-11-09T00:00-08:00&d2=2024-11-09T23:59-08:00&goal=3000&mindisp=4000&name=ID-A-Thon 2024&d1comp=2024-11-08T00:00-08:00&d2comp=2024-11-08T23:59-08:00&namecomp=Previous Day" height="200" width="700" frameborder="0"></iframe>
 
 
 ## ID-A-Thon Leaderboard
